@@ -1,114 +1,89 @@
-import React, { useEffect } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
-import { useNavigate } from 'react-router-dom';
-import { logoutUser, fetchAllCourses } from '../store';
-import './css/InstructorDashboard.css';
+// v1/frontend/src/pages/InstructorDashboard.jsx
+import React from 'react';
+import { useSelector } from 'react-redux';
+import { Routes, Route, Link, Navigate, useLocation } from 'react-router-dom';
+import { BookOpen, BarChart3, PlusCircle, Layers, Settings } from 'lucide-react';
+import ProfileDropdown from '../components/ProfileDropdown'; 
+// Import new components for nested routes
+import MyCourses from './InstructorCourse/MyCourses';
+import StudentAnalytics from './InstructorCourse/StudentAnalytics';
+import InstructorProfileSettings from './InstructorCourse/InstructorProfileSettings';
+// Import StudentDashboard CSS for shared styling elements (navbar, content layout)
+import '../pages/css/StudentDashboard.css'; 
 
 const InstructorDashboard = () => {
-  const dispatch = useDispatch();
-  const navigate = useNavigate();
-  
   const { user } = useSelector((state) => state.auth);
-  const { list: courses, loading } = useSelector((state) => state.courses);
-
-  // Fetch courses when dashboard loads
-  useEffect(() => {
-    dispatch(fetchAllCourses());
-  }, [dispatch]);
-
-  // Filter: Show only courses created by THIS instructor
-  // Note: user.id comes from Redux auth slice, teacherId comes from the Course object
-  const myCourses = courses.filter(course => course.teacherId === user?.id);
-
-  const handleCreateClick = () => {
-    navigate('/create-course'); // Assumes you will create this route later
-  };
+  const location = useLocation(); 
+  
+  // Helper to check if the path is active or is the index route
+  const isActive = (path) => location.pathname === path || location.pathname === path + '/';
 
   return (
-    <div className="instructor-dash-container">
-      <header className="instructor-header">
-        <div>
-          <h1>Instructor Studio</h1>
-          <p style={{ color: '#9ca3af' }}>Manage your content and students</p>
+    // Reuse student-dash-layout for consistent structure
+    <div className="student-dash-layout"> 
+      
+      {/* 1. Navigation Bar (Using student-navbar class for styling) */}
+      <header className="student-navbar">
+        <div className="nav-brand">
+          <BookOpen size={24} />
+          <span>Instructor Studio</span>
         </div>
-        <div className="header-actions">
-          <button className="create-btn" onClick={handleCreateClick}>
-            + Create New Course
-          </button>
-          <button 
-            onClick={() => dispatch(logoutUser())} 
-            className="logout-btn"
+        
+        <nav className="nav-links">
+          {/* My Courses (Index) */}
+          <Link 
+            to="/instructor-dashboard/" 
+            className={`nav-link-item ${isActive('/instructor-dashboard') ? 'active' : ''}`}
           >
-            Logout
-          </button>
+            <Layers size={18} /> My Courses
+          </Link>
+          
+          {/* Student Analytics */}
+          <Link 
+            to="/instructor-dashboard/analytics" 
+            className={`nav-link-item ${location.pathname.startsWith('/instructor-dashboard/analytics') ? 'active' : ''}`}
+          >
+            <BarChart3 size={18} /> Student Analytics
+          </Link>
+
+          {/* Create Course */}
+          <Link 
+            to="/create-course" 
+            className={`nav-link-item ${location.pathname.startsWith('/create-course') ? 'active' : ''}`}
+            style={{ backgroundColor: '#f0fdf4', color: '#10b981', marginLeft: '1rem' }}
+          >
+            <PlusCircle size={18} /> Create New
+          </Link>
+        </nav>
+
+        <div className="nav-user-info">
+          {/* Reuse ProfileDropdown */}
+          <ProfileDropdown user={user} currentPath={location.pathname} />
         </div>
       </header>
 
-      <div className="dashboard-grid">
-        {/* Sidebar */}
-        <nav className="sidebar-menu">
-          <div className="menu-item active">My Courses</div>
-          <div className="menu-item">Analytics</div>
-          <div className="menu-item">Students</div>
-          <div className="menu-item">Settings</div>
-        </nav>
+      {/* 2. Main Content Section with Nested Routes (Using student-main-content class) */}
+      <main className="student-main-content">
+        <Routes>
+          {/* Default Route: My Courses */}
+          <Route index element={<MyCourses />} /> 
+          
+          {/* Student Analytics Route */}
+          <Route path="analytics" element={<StudentAnalytics />} />
+          
+          {/* Profile Settings Route */}
+          <Route path="settings" element={<InstructorProfileSettings />} />
 
-        {/* Main Content Area */}
-        <main className="content-area">
-          <div className="metrics-row">
-            <div className="metric-box">
-              <h4>Total Courses</h4>
-              <span>{myCourses.length}</span>
-            </div>
-            <div className="metric-box">
-              <h4>Total Students</h4>
-              <span>0</span> {/* Placeholder until backend supports enrollment counts */}
-            </div>
-            <div className="metric-box">
-              <h4>Avg. Rating</h4>
-              <span>0.0</span>
-            </div>
-          </div>
+          {/* Fallback to My Courses for unknown nested paths */}
+          <Route path="*" element={<Navigate to="/instructor-dashboard" replace />} /> 
+        </Routes>
+      </main>
 
-          <h2 className="section-title">My Courses</h2>
-
-          {loading ? (
-            <div className="loading-state">Loading your courses...</div>
-          ) : myCourses.length > 0 ? (
-            <div className="course-grid">
-              {myCourses.map((course) => (
-                <div key={course._id} className="course-card">
-                  <div className="course-card-header">
-                    <span className="badge-subject">{course.subject}</span>
-                    <span className="badge-rating">★ {course.rating || 0}</span>
-                  </div>
-                  <h3>{course.title}</h3>
-                  <p className="course-desc">
-                    {course.description 
-                      ? course.description.substring(0, 80) + '...' 
-                      : 'No description provided.'}
-                  </p>
-                  <div className="course-card-footer">
-                    <button className="btn-edit" onClick={() => navigate(`/courses/edit/${course._id}`)}>
-                      Edit
-                    </button>
-                    <button className="btn-view" onClick={() => navigate(`/courses/${course._id}`)}>
-                      View
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="empty-state-instructor">
-              <p>You haven't published any courses yet.</p>
-              <button className="create-btn-small" onClick={handleCreateClick}>
-                Create Your First Course
-              </button>
-            </div>
-          )}
-        </main>
-      </div>
+      {/* 3. Footer (Using student-footer class for styling) */}
+      <footer className="student-footer">
+        <p>&copy; {new Date().getFullYear()} Izumi Portal. Instructor Studio.</p>
+        <p>Support | Terms</p>
+      </footer>
     </div>
   );
 };

@@ -1,12 +1,14 @@
+// v1/frontend/src/pages/InstructorCourse/CourseEditor.jsx
+
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useDispatch } from 'react-redux';
-import { useNavigate } from 'react-router-dom';
-import { createNewCourse } from '../../store';
+import { useDispatch, useSelector } from 'react-redux';
+import { useNavigate, useParams } from 'react-router-dom';
+import { createNewCourse, fetchCourseById, updateCourse } from '../../store';
 import { 
     Plus, Trash2, Save, BookOpen, Clock, Layers, GitBranch, 
-    Video, FileText, CheckSquare, Settings, ChevronRight, ChevronDown, MoreVertical
+    Video, FileText, CheckSquare, Settings, ChevronRight, ChevronDown, MoreVertical, Loader2
 } from 'lucide-react';
-import QuizBuilder from '../../components/QuizBuilder'; // Import the new component
+import QuizBuilder from '../../components/QuizBuilder'; 
 import '../css/CourseEditor.css'; 
 
 // ==========================================
@@ -37,6 +39,7 @@ const initialCourseStructure = {
     courseTitle: "Untitled Course",
     courseDescription: "A description for the entire course.",
     subject: "General",
+    _id: null, // Include _id for existing courses
 };
 
 // Helper returns an ELEMENT
@@ -76,10 +79,7 @@ const deleteModuleFromStructure = (modules, moduleId) => {
     return newModules;
 };
 
-// ==========================================
-// 2. SUB-COMPONENTS
-// ==========================================
-
+// ... (ModuleActions, ModuleTreeItem components unchanged)
 const ModuleActions = ({ module, onAction, isRoot }) => {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const menuRef = useRef(null);
@@ -119,7 +119,6 @@ const ModuleActions = ({ module, onAction, isRoot }) => {
     );
 };
 
-// Recursive Tree Item
 const ModuleTreeItem = ({ modules, moduleId, onSelect, onAction, selectedId, rootId, depth = 0 }) => {
     const [isExpanded, setIsExpanded] = useState(true);
     const module = modules[moduleId];
@@ -181,19 +180,26 @@ const ModuleTreeItem = ({ modules, moduleId, onSelect, onAction, selectedId, roo
     );
 };
 
+
 // ==========================================
-// 3. MAIN COMPONENT
+// 3. MAIN COMPONENT (CourseEditor)
 // ==========================================
 const CourseEditor = () => {
     const dispatch = useDispatch();
     const navigate = useNavigate();
+    const { courseId } = useParams(); // Get courseId from URL
     
+    // Global State for existing course data
+    const { currentCourse } = useSelector(state => state.courses);
+
     // State
     const [isSaving, setIsSaving] = useState(false);
     const [lastSaved, setLastSaved] = useState(null);
+    // Initialize with a structure including the necessary keys
     const [courseStructure, setCourseStructure] = useState(initialCourseStructure);
     const [selectedModuleId, setSelectedModuleId] = useState(initialCourseStructure.rootModule.id);
     const [isIntroModuleForm, setIsIntroModuleForm] = useState(true);
+    const [isLoadingCourse, setIsLoadingCourse] = useState(!!courseId); // Start true if courseId exists
 
     // Merge root module into map for consistent lookups
     const allModules = useMemo(() => ({
@@ -203,31 +209,62 @@ const CourseEditor = () => {
 
     const selectedModule = allModules[selectedModuleId] || courseStructure.rootModule;
     
-    // Load Draft
+    // --- Effect 1: Fetch Existing Course Data or Load Draft ---
     useEffect(() => {
-        const storedData = localStorage.getItem(COURSE_DATA_PATH);
-        if (storedData) {
-            try {
-                const loaded = JSON.parse(storedData);
-                if (loaded.rootModule) {
-                    setCourseStructure(loaded);
-                    setLastSaved(localStorage.getItem(COURSE_DATA_PATH + '_time'));
-                    setSelectedModuleId(loaded.rootModule.id);
-                    setIsIntroModuleForm(true);
+        if (courseId) {
+            // Fetch existing course for editing
+            dispatch(fetchCourseById(courseId));
+        } else {
+             // For new courses, load local storage draft
+            const storedData = localStorage.getItem(COURSE_DATA_PATH);
+            if (storedData) {
+                try {
+                    const loaded = JSON.parse(storedData);
+                    if (loaded.rootModule) {
+                        setCourseStructure(loaded);
+                        setLastSaved(localStorage.getItem(COURSE_DATA_PATH + '_time'));
+                        setSelectedModuleId(loaded.rootModule.id);
+                        setIsIntroModuleForm(true);
+                    }
+                } catch (e) {
+                    console.error("Error loading draft", e);
                 }
-            } catch (e) {
-                console.error("Error loading draft", e);
             }
         }
-    }, []);
+    }, [dispatch, courseId]);
+    
+    // --- Effect 2: Populate state after fetching existing course ---
+    useEffect(() => {
+        if (courseId && currentCourse && currentCourse._id === courseId && isLoadingCourse) {
+            // Map the fetched data to the internal courseStructure state
+            setCourseStructure({
+                rootModule: currentCourse.rootModule,
+                modules: currentCourse.modules,
+                courseTitle: currentCourse.title,
+                courseDescription: currentCourse.description,
+                subject: currentCourse.subject,
+                _id: currentCourse._id, // Keep the course ID for update logic
+            });
+            setSelectedModuleId(currentCourse.rootModule.id);
+            setIsIntroModuleForm(true);
+            setIsLoadingCourse(false);
+            setLastSaved(new Date().toISOString());
+        } else if (courseId && !isLoadingCourse && !currentCourse) {
+            // Handle case where courseId exists but fetch failed
+            // Note: Error handling is basic, relying on CourseViewer's robust checks
+        }
+    }, [courseId, currentCourse, isLoadingCourse]);
 
     const saveDraft = useCallback((structure) => {
-        setIsSaving(true);
-        localStorage.setItem(COURSE_DATA_PATH, JSON.stringify(structure));
-        localStorage.setItem(COURSE_DATA_PATH + '_time', new Date().toISOString());
-        setTimeout(() => setIsSaving(false), 500);
-        setLastSaved(new Date().toISOString());
-    }, []);
+        // Only save draft for NEW courses (not editing a published one)
+        if (!courseId) {
+            setIsSaving(true);
+            localStorage.setItem(COURSE_DATA_PATH, JSON.stringify(structure));
+            localStorage.setItem(COURSE_DATA_PATH + '_time', new Date().toISOString());
+            setTimeout(() => setIsSaving(false), 500);
+            setLastSaved(new Date().toISOString());
+        }
+    }, [courseId]);
 
     // --- ACTIONS ---
     const handleSelectModule = (id) => {
@@ -289,9 +326,14 @@ const CourseEditor = () => {
             }
             delete updatedModules[courseStructure.rootModule.id];
 
+            const newModulesMap = Object.keys(updatedModules).reduce((acc, key) => {
+                 if (key !== updatedRoot.id) acc[key] = updatedModules[key];
+                 return acc;
+            }, {});
+
             const newStructure = { 
                 ...courseStructure, 
-                modules: updatedModules, 
+                modules: newModulesMap, 
                 rootModule: updatedRoot 
             };
 
@@ -301,6 +343,7 @@ const CourseEditor = () => {
             setIsIntroModuleForm(true);
         }
     }, [allModules, courseStructure, saveDraft]);
+
 
     const handleModuleAction = (action, moduleId) => {
         if (action === 'add') handleAddModule(moduleId);
@@ -317,19 +360,27 @@ const CourseEditor = () => {
 
             const newModuleData = { ...currentModule, [field]: value };
             
+            let nextState;
             if (isRoot) {
-                return { ...prev, rootModule: newModuleData };
+                nextState = { ...prev, rootModule: newModuleData };
             } else {
-                return { 
+                nextState = { 
                     ...prev, 
                     modules: { ...prev.modules, [targetId]: newModuleData } 
                 };
             }
+            
+            saveDraft(nextState);
+            return nextState;
         });
     };
 
     const handleCourseMetaChange = (field, value) => {
-        setCourseStructure(prev => ({ ...prev, [field]: value }));
+        setCourseStructure(prev => {
+             const nextState = { ...prev, [field]: value };
+             saveDraft(nextState);
+             return nextState;
+        });
     };
 
     // Autosave Timer
@@ -338,14 +389,17 @@ const CourseEditor = () => {
         return () => clearTimeout(timer);
     }, [courseStructure, saveDraft]);
 
-    // Publish Course
+    // Publish/Update Course
     const handlePublishCourse = async () => {
         if (!courseStructure.courseTitle || !courseStructure.subject) {
             alert("Please provide Title and Subject.");
             return;
         }
+        
+        const isEditing = !!courseId;
+        const actionText = isEditing ? "Update" : "Publish";
 
-        if (window.confirm("Publish this course?")) {
+        if (window.confirm(`${actionText} this course?`)) {
             setIsSaving(true);
             try {
                 const payload = {
@@ -355,21 +409,49 @@ const CourseEditor = () => {
                     rootModule: courseStructure.rootModule,
                     modules: courseStructure.modules
                 };
+                
+                let result;
+                if (isEditing) {
+                    // EDIT/UPDATE existing course
+                    result = await dispatch(updateCourse({ id: courseId, data: payload }));
+                    
+                    if (updateCourse.fulfilled.match(result)) {
+                        alert("Course updated successfully!");
+                        navigate('/instructor-dashboard');
+                    } else {
+                        alert(`Update failed: ${result.payload}`);
+                    }
 
-                const result = await dispatch(createNewCourse(payload));
-                if (createNewCourse.fulfilled.match(result)) {
-                    localStorage.removeItem(COURSE_DATA_PATH);
-                    navigate('/instructor-dashboard');
                 } else {
-                    alert(`Failed: ${result.payload}`);
+                    // CREATE new course
+                    result = await dispatch(createNewCourse(payload));
+                    
+                    if (createNewCourse.fulfilled.match(result)) {
+                        localStorage.removeItem(COURSE_DATA_PATH);
+                        navigate('/instructor-dashboard');
+                    } else {
+                        alert(`Publish failed: ${result.payload}`);
+                    }
                 }
             } catch (e) {
                 console.error(e);
+                alert(`An error occurred during ${actionText.toLowerCase()}.`);
             } finally {
                 setIsSaving(false);
             }
         }
     };
+    
+    // Display loading screen while fetching existing course data
+    if (courseId && isLoadingCourse) {
+         return (
+            <div className="loading-state-full">
+                <Loader2 className="animate-spin" size={32} /> Loading course for editing...
+            </div>
+         );
+    }
+    
+    const publishButtonText = courseId ? 'Update Course' : 'Publish Course';
 
     return (
         <div className="course-editor-app">
@@ -398,7 +480,7 @@ const CourseEditor = () => {
                          required={true}
                     />
                     <button onClick={handlePublishCourse} disabled={isSaving} className="btn-publish-course">
-                        <Save size={16} /> Publish
+                        <Save size={16} /> {publishButtonText}
                     </button>
                 </div>
 
@@ -541,11 +623,3 @@ const CourseEditor = () => {
 };
 
 export default CourseEditor;
-
-
-// ### 3. `client/src/components/course-player/QuizTaker.jsx` (New Student Component)
-
-// This component will be used later in the Student's "Course Viewer" to take the quiz.
-
-
-// http://googleusercontent.com/immersive_entry_chip/1

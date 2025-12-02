@@ -1,3 +1,4 @@
+// v1/frontend/src/routes/AppRoutes.jsx
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import Login from '../pages/Login';
@@ -5,7 +6,6 @@ import Signup from '../pages/Signup';
 import StudentDashboard from '../pages/StudentDashboard';
 import InstructorDashboard from '../pages/InstructorDashboard';
 import CourseEditor from '../pages/InstructorCourse/CourseEditor';
-// import CourseViewer from '../pages/StudentCourse/CourseViewer'; // REMOVED: Now nested
 import ProtectedRoute from '../components/ProtectedRoute';
 
 const AppRoutes = () => {
@@ -15,8 +15,7 @@ const AppRoutes = () => {
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
 
-      {/* STUDENT ROUTES - Note the '/*' for nested routing */}
-      {/* This renders StudentDashboard, which handles all its sub-routes, including the Viewer. */}
+      {/* STUDENT ROUTES */}
       <Route 
         path="/student-dashboard/*" 
         element={
@@ -25,12 +24,10 @@ const AppRoutes = () => {
           </ProtectedRoute>
         } 
       />
-      
-      {/* REMOVED DEDICATED ROUTE: /student-dashboard/courses/:courseId */}
 
-      {/* INSTRUCTOR ROUTES */}
+      {/* INSTRUCTOR ROUTES - Updated to allow nested routes */}
       <Route 
-        path="/instructor-dashboard" 
+        path="/instructor-dashboard/*" 
         element={
           <ProtectedRoute allowedRole="teacher">
             <InstructorDashboard />
@@ -38,12 +35,22 @@ const AppRoutes = () => {
         } 
       />
       
-      {/* CREATE COURSE (Instructor Only) */}
+      {/* CREATE COURSE (Instructor Only) - Top Level */}
       <Route 
         path="/create-course" 
         element={
           <ProtectedRoute allowedRole="teacher">
             <CourseEditor />
+          </ProtectedRoute>
+        } 
+      />
+      
+      {/* EDIT COURSE (Instructor Only) - Path for editing an existing course */}
+      <Route 
+        path="/courses/edit/:courseId" 
+        element={
+          <ProtectedRoute allowedRole="teacher">
+            <CourseEditor /> 
           </ProtectedRoute>
         } 
       />

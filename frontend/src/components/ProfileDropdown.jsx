@@ -1,3 +1,4 @@
+// v1/frontend/src/components/ProfileDropdown.jsx
 import React, { useState, useRef, useEffect } from 'react';
 import { useDispatch } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
@@ -31,6 +32,9 @@ const ProfileDropdown = ({ user, currentPath }) => {
         setIsOpen(false);
     };
     
+    // Determine the base dashboard path for dynamic navigation
+    const basePath = user?.role === 'teacher' ? '/instructor-dashboard' : '/student-dashboard';
+    
     // Check if the link to Profile Settings is the current active route
     const isSettingsActive = currentPath.includes('/settings');
 
@@ -53,15 +57,17 @@ const ProfileDropdown = ({ user, currentPath }) => {
                         <span className="text-xs text-gray-500 capitalize">({user?.role})</span>
                     </div>
                     
+                    {/* Dynamic link to Profile Settings */}
                     <button 
-                        onClick={() => handleNavigation('/student-dashboard/settings')}
+                        onClick={() => handleNavigation(`${basePath}/settings`)}
                         className="menu-item"
                     >
                         <Settings size={16} /> Profile Settings
                     </button>
                     
+                    {/* Dynamic link to main Dashboard */}
                     <button 
-                        onClick={() => handleNavigation('/student-dashboard')}
+                        onClick={() => handleNavigation(basePath)}
                         className="menu-item"
                     >
                         <Layers size={16} /> Dashboard

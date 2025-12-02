@@ -194,6 +194,20 @@ export const updateCourse = createAsyncThunk(
   }
 );
 
+// NEW THUNK: Fetch Course Analytics
+export const fetchCourseAnalytics = createAsyncThunk(
+  'courses/fetchAnalytics',
+  async (_, { rejectWithValue }) => {
+    try {
+      // NOTE: Calls the new backend route
+      return await apiRequest('/courses/analytics', 'GET'); 
+    } catch (err) {
+      console.error("Error fetching course analytics:", err);
+      return rejectWithValue(err.message);
+    }
+  }
+);
+
 // --- Slice ---
 const courseSlice = createSlice({
   name: 'courses',
@@ -202,6 +216,7 @@ const courseSlice = createSlice({
     currentCourse: null,
     loading: false,
     error: null,
+    analyticsData: [], // NEW STATE: For instructor analytics
   },
   reducers: {
     clearCurrentCourse: (state) => {
@@ -225,7 +240,11 @@ const courseSlice = createSlice({
         state.currentCourse = action.payload;
         const index = state.list.findIndex((c) => c._id === action.payload._id);
         if (index !== -1) state.list[index] = action.payload;
-      });
+      })
+      // NEW: Fetch Analytics
+      .addCase(fetchCourseAnalytics.pending, (state) => { state.loading = true; state.error = null; })
+      .addCase(fetchCourseAnalytics.fulfilled, (state, action) => { state.loading = false; state.analyticsData = action.payload; })
+      .addCase(fetchCourseAnalytics.rejected, (state, action) => { state.loading = false; state.error = action.payload; state.analyticsData = []; });
   },
 });
 
